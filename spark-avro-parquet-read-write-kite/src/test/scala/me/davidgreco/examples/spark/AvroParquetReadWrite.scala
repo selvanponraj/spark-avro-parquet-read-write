@@ -1,16 +1,15 @@
 package me.davidgreco.examples.spark
 
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
-import org.apache.hadoop.conf.Configuration
-import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.SparkContext._
+import org.apache.spark.sql.SQLContext
 import org.apache.spark.{SparkConf, SparkContext}
 import org.kitesdk.data._
 import org.kitesdk.data.mapreduce.{DatasetKeyInputFormat, DatasetKeyOutputFormat}
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 
-class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfterAll {
+class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfterAll with TestSupport {
   var sparkContext: SparkContext = _
 
   override def beforeAll() = {
@@ -25,12 +24,7 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
   "Spark" must {
     "read and write an avro data set using kite" in {
 
-      //I delete the output in case it exists
-      val conf = new Configuration()
-      val dir = new Path(s"${System.getProperty("user.dir")}/tmp/")
-      val fileSystem = dir.getFileSystem(conf)
-      if (fileSystem.exists(dir))
-        fileSystem.delete(dir, true)
+      cleanup()
 
       val descriptor = new DatasetDescriptor.Builder().schemaUri("resource:product.avsc").compressionType(CompressionType.Snappy).build() //Snappy compression is the default as the AVRO format
       val products = Datasets.create(s"dataset:file://${System.getProperty("user.dir")}/tmp/test/products", descriptor, classOf[GenericRecord]).asInstanceOf[Dataset[GenericRecord]]
@@ -64,6 +58,9 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
           i <- 1 to 100
         } yield (s"product-$i", i.toLong)
       )
+
+      cleanup()
+
     }
   }
 
@@ -71,12 +68,7 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
   "Spark" must {
     "read and write a parquet data set using kite" in {
 
-      //I delete the output in case it exists
-      val conf = new Configuration()
-      val dir = new Path(s"${System.getProperty("user.dir")}/tmp/")
-      val fileSystem = dir.getFileSystem(conf)
-      if (fileSystem.exists(dir))
-        fileSystem.delete(dir, true)
+      cleanup()
 
       val descriptor = new DatasetDescriptor.Builder().schemaUri("resource:product.avsc").compressionType(CompressionType.Snappy).format(Formats.PARQUET).build() //Snappy compression is the default
       val products = Datasets.create(s"dataset:file://${System.getProperty("user.dir")}/tmp/test/products", descriptor, classOf[GenericRecord]).asInstanceOf[Dataset[GenericRecord]]
@@ -110,8 +102,64 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
           i <- 1 to 100
         } yield (s"product-$i", i.toLong)
       )
-   }
+
+      cleanup()
+
+    }
   }
+
+  "Spark" must {
+    "be able to create a SchemaRDD/Dataframe from a kite avro dataset" in {
+
+      cleanup()
+
+      val products = generateDataset(Formats.PARQUET)
+
+      implicit val sqlContext = new SQLContext(sparkContext)
+
+      val data = kiteDataset2RDD(products)
+
+      data.registerTempTable("product")
+
+      val res = sqlContext.sql("select * from product where id < 10")
+
+      res.map(row => (row.getAs[String](0), row.getAs[Long](1))).collect() must be(
+        for {
+          i <- 1 to 9
+        } yield (s"product-$i", i.toLong)
+      )
+
+      cleanup()
+
+    }
+  }
+
+  "Spark" must {
+    "be able to create a SchemaRDD/Dataframe from a kite parquet dataset" in {
+
+      cleanup()
+
+      val products = generateDataset(Formats.PARQUET)
+
+      implicit val sqlContext = new SQLContext(sparkContext)
+
+      val data = kiteDataset2RDD(products)
+
+      data.registerTempTable("product")
+
+      val res = sqlContext.sql("select * from product where id < 10")
+
+      res.map(row => (row.getAs[String](0), row.getAs[Long](1))).collect() must be(
+        for {
+          i <- 1 to 9
+        } yield (s"product-$i", i.toLong)
+      )
+
+      cleanup()
+
+    }
+  }
+
 
   override def afterAll() = {
     sparkContext.stop()
