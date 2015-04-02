@@ -64,7 +64,6 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
     }
   }
 
-
   "Spark" must {
     "read and write a parquet data set using kite" in {
 
@@ -159,7 +158,6 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
 
     }
   }
-
 
   override def afterAll() = {
     sparkContext.stop()
