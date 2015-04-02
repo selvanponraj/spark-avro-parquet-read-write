@@ -33,6 +33,8 @@ class AvroReadWriteSpec extends WordSpec with MustMatchers with BeforeAndAfterAl
 
       val rows: RDD[String] = rdd.map(gr => gr._1.datum().get("b").toString)
 
+      rows.foreach(println)
+
       rows.first() must be("CIAO0")
     }
   }
