@@ -1,6 +1,9 @@
 package me.davidgreco.examples.spark
 
+import com.databricks.spark.avro.kite._
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.Path
 import org.apache.hadoop.mapreduce.Job
 import org.apache.spark.SparkContext._
 import org.apache.spark.sql.SQLContext
@@ -9,7 +12,9 @@ import org.kitesdk.data._
 import org.kitesdk.data.mapreduce.{DatasetKeyInputFormat, DatasetKeyOutputFormat}
 import org.scalatest.{BeforeAndAfterAll, MustMatchers, WordSpec}
 
-class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfterAll with TestSupport {
+case class Person(name: String, age: Int)
+
+class AvroParquetReadWriteSpec extends WordSpec with MustMatchers with BeforeAndAfterAll with TestSupport {
   var sparkContext: SparkContext = _
 
   override def beforeAll() = {
@@ -112,11 +117,11 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
 
       cleanup()
 
-      val products = generateDataset(Formats.PARQUET)
+      val products = generateDataset(Formats.AVRO)
 
       implicit val sqlContext = new SQLContext(sparkContext)
 
-      val data = kiteDataset2RDD(products)
+      val data = sqlContext.kiteDatasetFile(products)
 
       data.registerTempTable("product")
 
@@ -142,7 +147,7 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
 
       implicit val sqlContext = new SQLContext(sparkContext)
 
-      val data = kiteDataset2RDD(products)
+      val data = sqlContext.kiteDatasetFile(products)
 
       data.registerTempTable("product")
 
@@ -156,6 +161,37 @@ class AvroParquetReadWrite extends WordSpec with MustMatchers with BeforeAndAfte
 
       cleanup()
 
+    }
+  }
+
+  "Spark" must {
+    "be able to create a kite dataset from a SchemaRDD/Dataframe" in {
+
+      val sqlContext = new SQLContext(sparkContext)
+
+      import sqlContext.createSchemaRDD
+
+      val datasetURI = URIBuilder.build(s"repo:file:////${System.getProperty("user.dir")}/tmp", "test", "persons")
+
+      //I delete the output dir in case it exists
+      val conf = new Configuration()
+      val dir = new Path(s"${System.getProperty("user.dir")}/tmp")
+      val fileSystem = dir.getFileSystem(conf)
+      if (fileSystem.exists(dir))
+        fileSystem.delete(dir, true)
+
+      val peopleList = List(Person("David", 50), Person("Ruben", 14), Person("Giuditta", 12), Person("Vita", 19))
+      val people = sparkContext.parallelize[Person](peopleList)
+      people.registerTempTable("people")
+      val teenagers = sqlContext.sql("SELECT * FROM people WHERE age >= 13 AND age <= 19")
+      val dataset = KiteDatasetSaver.saveAsKiteDataset(teenagers, datasetURI, Formats.PARQUET)
+
+      val reader = dataset.newReader()
+
+      import collection.JavaConversions._
+
+      reader.iterator().toList.sortBy(g => g.get("name").toString).mkString(",") must be("{\"name\": \"Ruben\", \"age\": 14},{\"name\": \"Vita\", \"age\": 19}")
+      reader.close()
     }
   }
 

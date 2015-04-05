@@ -4,6 +4,8 @@ version := "1.0"
 
 scalaVersion := "2.10.5"
 
+ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
+
 scalacOptions ++= Seq(
   "-deprecation",
   "-encoding", "UTF-8", // yes, this is 2 args
@@ -46,5 +48,7 @@ libraryDependencies ++= Seq(
   "org.apache.hadoop" % "hadoop-client" % hadoopVersion % "compile" excludeAll ExclusionRule("javax.servlet"),
   "org.scalatest" % "scalatest_2.10" % scalaTestVersion % "test"
 )
+
+fork := true //http://stackoverflow.com/questions/27824281/sparksql-missingrequirementerror-when-registering-table
 
 parallelExecution in Test := false

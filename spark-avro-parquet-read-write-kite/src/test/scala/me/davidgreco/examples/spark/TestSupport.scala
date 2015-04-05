@@ -1,12 +1,12 @@
 package me.davidgreco.examples.spark
 
+import com.databricks.spark.avro.SchemaSupport
 import org.apache.avro.generic.{GenericRecord, GenericRecordBuilder}
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
-import org.apache.spark.sql.SQLContext
 import org.kitesdk.data._
 
-trait TestSupport {
+trait TestSupport extends SchemaSupport {
   protected def cleanup(): Unit = {
     val conf = new Configuration()
     val dir = new Path(s"${System.getProperty("user.dir")}/tmp/")
@@ -29,12 +29,6 @@ trait TestSupport {
     products
   }
 
-  protected def kiteDataset2RDD(dataSet: Dataset[_])(implicit sqlContext: SQLContext) = {
-    import com.databricks.spark.avro._
-    dataSet.getDescriptor.getFormat match {
-      case Formats.AVRO => sqlContext.avroFile(dataSet.getDescriptor.getLocation.getRawPath)
-      case Formats.PARQUET => sqlContext.parquetFile(dataSet.getDescriptor.getLocation.getRawPath)
-    }
-  }
-
 }
+
+
